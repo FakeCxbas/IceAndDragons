@@ -41,13 +41,8 @@ java -version
    cd "Server con Zorrito"
    ```
 
-2. **Pasar la carpeta `world` (4.25 GB):**
-   Dado que la carpeta del mundo supera los límites de tamaño de Git (más de 4 GB), transfiérela directamente a la raíz de esta carpeta usando cualquiera de estos métodos:
-   - **Por pendrive / disco USB:** Copia la carpeta `world` a tu USB y pégala dentro de la carpeta del servidor en Linux.
-   - **Por red local (SCP desde PowerShell en Windows):**
-     ```powershell
-     scp -r "c:\Users\WinterOS\Desktop\Server con Zorrito\world" usuario@IP_DE_LINUX:~/servidor/world
-     ```
+2. **Mundo nuevo (Reinicio de mundo):**
+   El servidor no incluye la carpeta `world`, por lo que al iniciarlo por primera vez en Linux creará un **mundo completamente nuevo y fresco desde cero**.
 
 3. **Dar permisos de ejecución al script:**
    ```bash
