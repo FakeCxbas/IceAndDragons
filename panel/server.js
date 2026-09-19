@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { exec, execSync } = require('child_process');
+const { exec, execSync, spawn } = require('child_process');
 const { sendRconCommand } = require('./rcon');
 
 const app = express();
@@ -12,17 +12,91 @@ const LOGS_FILE = path.join(SERVER_DIR, 'logs', 'latest.log');
 const CHUNKY_TASK_FILE = path.join(SERVER_DIR, 'config', 'chunky', 'tasks', 'minecraft', 'overworld.properties');
 const PLAYIT_LOG_FILE = path.join(SERVER_DIR, 'playit.log');
 const BACKUPS_DIR = path.join(SERVER_DIR, 'backups');
+const WORLD_DIR = path.join(SERVER_DIR, 'world');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Cache en memoria para seguimiento de logs
-let lastLogSize = 0;
-try {
-  if (fs.existsSync(LOGS_FILE)) {
-    lastLogSize = fs.statSync(LOGS_FILE).size;
+// ==============================================================================
+// 1. Muestreo de CPU del Sistema en Tiempo Real (Delta Sampling)
+// ==============================================================================
+let prevCpus = os.cpus();
+let systemCpuPercent = 0;
+
+setInterval(() => {
+  try {
+    const currentCpus = os.cpus();
+    let totalDiff = 0;
+    let idleDiff = 0;
+
+    for (let i = 0; i < currentCpus.length; i++) {
+      const prev = prevCpus[i].times;
+      const curr = currentCpus[i].times;
+
+      const prevTotal = prev.user + prev.nice + prev.sys + prev.idle + prev.irq;
+      const currTotal = curr.user + curr.nice + curr.sys + curr.idle + curr.irq;
+
+      totalDiff += (currTotal - prevTotal);
+      idleDiff += (curr.idle - prev.idle);
+    }
+
+    prevCpus = currentCpus;
+    if (totalDiff > 0) {
+      systemCpuPercent = Math.max(0, Math.min(100, Math.round(((totalDiff - idleDiff) / totalDiff) * 1000) / 10));
+    }
+  } catch (e) {}
+}, 1000);
+
+// ==============================================================================
+// 2. Caché de Disco y Tamaño del Mundo (Evita saturar I/O)
+// ==============================================================================
+let cachedDiskInfo = { totalGB: 0, usedGB: 0, freeGB: 0, percent: 0, lastCheck: 0 };
+let cachedWorldSize = { sizeMB: 0, sizeGB: '0.0', lastCheck: 0 };
+
+function getDiskInfo() {
+  const now = Date.now();
+  if (now - cachedDiskInfo.lastCheck < 15000 && cachedDiskInfo.totalGB > 0) {
+    return cachedDiskInfo;
   }
-} catch (e) {}
+  try {
+    const dfOut = execSync(`df -k "${SERVER_DIR}" 2>/dev/null`, { encoding: 'utf-8' });
+    const lines = dfOut.trim().split('\n');
+    if (lines.length > 1) {
+      const parts = lines[1].trim().split(/\s+/);
+      const totalK = parseInt(parts[1]) || 0;
+      const usedK = parseInt(parts[2]) || 0;
+      const availK = parseInt(parts[3]) || 0;
+      cachedDiskInfo = {
+        totalGB: parseFloat((totalK / (1024 * 1024)).toFixed(1)),
+        usedGB: parseFloat((usedK / (1024 * 1024)).toFixed(1)),
+        freeGB: parseFloat((availK / (1024 * 1024)).toFixed(1)),
+        percent: totalK > 0 ? Math.round((usedK / totalK) * 100) : 0,
+        lastCheck: now
+      };
+    }
+  } catch (e) {}
+  return cachedDiskInfo;
+}
+
+function getWorldSize() {
+  const now = Date.now();
+  if (now - cachedWorldSize.lastCheck < 20000 && cachedWorldSize.sizeMB > 0) {
+    return cachedWorldSize;
+  }
+  try {
+    if (fs.existsSync(WORLD_DIR)) {
+      const duOut = execSync(`du -sk "${WORLD_DIR}" 2>/dev/null`, { encoding: 'utf-8' });
+      const k = parseInt(duOut.trim().split(/\s+/)[0]) || 0;
+      const mb = Math.round(k / 1024);
+      cachedWorldSize = {
+        sizeMB: mb,
+        sizeGB: (mb / 1024).toFixed(2),
+        lastCheck: now
+      };
+    }
+  } catch (e) {}
+  return cachedWorldSize;
+}
 
 // Helper para parsear progreso de Chunky
 function getChunkyProgress() {
@@ -38,7 +112,6 @@ function getChunkyProgress() {
     lastUpdate: ''
   };
 
-  // 1. Leer task file si existe
   try {
     if (fs.existsSync(CHUNKY_TASK_FILE)) {
       const content = fs.readFileSync(CHUNKY_TASK_FILE, 'utf-8');
@@ -54,17 +127,15 @@ function getChunkyProgress() {
     }
   } catch (e) {}
 
-  // 2. Parsear últimas líneas de logs/latest.log para datos en vivo
   try {
     if (fs.existsSync(LOGS_FILE)) {
-      const logsTail = execSync(`tail -n 80 "${LOGS_FILE}" 2>/dev/null`, { encoding: 'utf-8' });
+      const logsTail = execSync(`tail -n 60 "${LOGS_FILE}" 2>/dev/null`, { encoding: 'utf-8' });
       const logLines = logsTail.split('\n');
       
       for (let i = logLines.length - 1; i >= 0; i--) {
         const line = logLines[i];
         if (line.includes('[Chunky] Task running for')) {
           progress.running = true;
-          // Formato: Processed: 760749 chunks (48,61%), ETA: 7:16:48, Rate: 30,7 cps, Current: 471, 1
           const matchChunks = line.match(/Processed:\s*(\d+)\s*chunks/);
           if (matchChunks) progress.chunks = parseInt(matchChunks[1]);
           
@@ -94,12 +165,42 @@ function getChunkyProgress() {
   return progress;
 }
 
-// 1. Estado general del servidor y recursos
+// Helper para detectar jugadores desde logs
+function getPlayersOnline() {
+  let players = { count: 0, max: 20, list: [] };
+  try {
+    if (fs.existsSync(LOGS_FILE)) {
+      const tail = execSync(`tail -n 150 "${LOGS_FILE}" 2>/dev/null`, { encoding: 'utf-8' });
+      const lines = tail.split('\n');
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i];
+        const match = line.match(/There are (\d+) of a max of (\d+) players online:(.*)/i);
+        if (match) {
+          players.count = parseInt(match[1]) || 0;
+          players.max = parseInt(match[2]) || 20;
+          const names = match[3].trim();
+          if (names) {
+            players.list = names.split(',').map(n => n.trim()).filter(Boolean);
+          }
+          break;
+        }
+      }
+    }
+  } catch (e) {}
+  return players;
+}
+
+// ==============================================================================
+// 3. Rutas API
+// ==============================================================================
+
+// Estado General y Telemetría Completa
 app.get('/api/status', (req, res) => {
   let isRunning = false;
   let pid = null;
-  let cpuPercent = 0;
+  let rawCpuPercent = 0;
   let memMB = 0;
+  const numCores = os.cpus().length;
 
   try {
     const pgrep = execSync(`pgrep -f "server_1.21.1.jar" 2>/dev/null`, { encoding: 'utf-8' }).trim();
@@ -109,11 +210,15 @@ app.get('/api/status', (req, res) => {
       const psOut = execSync(`ps -p ${pid} -o %cpu,rss --no-headers 2>/dev/null`, { encoding: 'utf-8' }).trim();
       if (psOut) {
         const [cpu, rss] = psOut.split(/\s+/);
-        cpuPercent = parseFloat(cpu) || 0;
+        rawCpuPercent = parseFloat(cpu) || 0;
         memMB = Math.round((parseInt(rss) || 0) / 1024);
       }
     }
   } catch (e) {}
+
+  // CPU normalizada (escala 0-100% de la capacidad total del sistema)
+  const normalizedProcessCpu = Math.min(100, Math.round((rawCpuPercent / numCores) * 10) / 10);
+  const coresUsed = parseFloat((rawCpuPercent / 100).toFixed(1));
 
   // Playit status
   let playitRunning = false;
@@ -145,17 +250,28 @@ app.get('/api/status', (req, res) => {
       port: 25565,
       voiceChatPort: 24454,
       rconPort: 25575,
-      cpu: cpuPercent,
       ramMB: memMB,
-      ramAllocated: '4G'
+      ramAllocatedMB: 4096,
+      ramPercent: Math.min(100, Math.round((memMB / 4096) * 100)),
+      cpu: {
+        raw: rawCpuPercent,
+        normalized: normalizedProcessCpu,
+        coresUsed: coresUsed,
+        explanation: `En Linux cada núcleo equivale a 100%. ${coresUsed} núcleos activos = ${rawCpuPercent}% raw, equivalente a ${normalizedProcessCpu}% del total del sistema (${numCores} núcleos).`
+      },
+      players: getPlayersOnline()
     },
     system: {
       totalMemMB: totalSysMem,
       usedMemMB: usedSysMem,
-      cpuCores: os.cpus().length,
+      memPercent: Math.round((usedSysMem / totalSysMem) * 100),
+      cpuCores: numCores,
+      systemCpuPercent: systemCpuPercent,
       platform: os.platform(),
       uptimeSeconds: Math.round(os.uptime())
     },
+    disk: getDiskInfo(),
+    world: getWorldSize(),
     playit: {
       running: playitRunning,
       claimUrl: playitClaimUrl,
@@ -165,15 +281,19 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// 2. Progreso de Chunky
+// Chunky Progress
 app.get('/api/chunky', (req, res) => {
   res.json(getChunkyProgress());
 });
 
-// 3. Control de Chunky (Pausar / Continuar)
+// Chunky Control
 app.post('/api/chunky/control', async (req, res) => {
   const { action } = req.body;
-  const cmd = action === 'pause' ? 'chunky pause' : 'chunky continue';
+  let cmd = 'chunky progress';
+  if (action === 'pause') cmd = 'chunky pause';
+  if (action === 'continue') cmd = 'chunky continue';
+  if (action === 'trim') cmd = 'chunky trim';
+  
   try {
     const output = await sendRconCommand('127.0.0.1', 25575, 'IceAndDragons2026!', cmd);
     res.json({ success: true, action, output });
@@ -182,7 +302,7 @@ app.post('/api/chunky/control', async (req, res) => {
   }
 });
 
-// 4. Últimos logs
+// Logs Endpoint
 app.get('/api/logs', (req, res) => {
   try {
     if (fs.existsSync(LOGS_FILE)) {
@@ -195,14 +315,22 @@ app.get('/api/logs', (req, res) => {
   }
 });
 
-// 5. Streaming de Logs en vivo (SSE)
+// Descargar Log Completo
+app.get('/api/logs/download', (req, res) => {
+  if (fs.existsSync(LOGS_FILE)) {
+    res.setHeader('Content-Disposition', 'attachment; filename="latest.log"');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    return fs.createReadStream(LOGS_FILE).pipe(res);
+  }
+  res.status(404).json({ error: 'Archivo de log no disponible' });
+});
+
+// Streaming de Logs (SSE)
 app.get('/api/logs/stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
-
-  let lastLinesCount = 0;
 
   const interval = setInterval(() => {
     try {
@@ -211,14 +339,14 @@ app.get('/api/logs/stream', (req, res) => {
         res.write(`data: ${JSON.stringify({ lines })}\n\n`);
       }
     } catch (e) {}
-  }, 1500);
+  }, 1200);
 
   req.on('close', () => {
     clearInterval(interval);
   });
 });
 
-// 6. Enviar comando RCON
+// Enviar Comando RCON
 app.post('/api/command', async (req, res) => {
   const { command } = req.body;
   if (!command) return res.status(400).json({ error: 'Comando vacío' });
@@ -231,7 +359,96 @@ app.post('/api/command', async (req, res) => {
   }
 });
 
-// 7. Backups
+// Acciones Rápidas del Servidor (Clima, Tiempo, Dificultad, Guardado, Mensajes)
+app.post('/api/server/control', async (req, res) => {
+  const { type, value } = req.body;
+  let mcCommand = '';
+
+  switch (type) {
+    case 'weather':
+      if (['clear', 'rain', 'thunder'].includes(value)) {
+        mcCommand = `weather ${value}`;
+      }
+      break;
+    case 'time':
+      if (['day', 'noon', 'night', 'midnight'].includes(value)) {
+        mcCommand = `time set ${value}`;
+      }
+      break;
+    case 'difficulty':
+      if (['peaceful', 'easy', 'normal', 'hard'].includes(value)) {
+        mcCommand = `difficulty ${value}`;
+      }
+      break;
+    case 'save':
+      mcCommand = 'save-all flush';
+      break;
+    case 'broadcast':
+      if (value && typeof value === 'string') {
+        const sanitized = value.replace(/["\\]/g, '');
+        mcCommand = `say §b[Servidor]§f ${sanitized}`;
+      }
+      break;
+    case 'kick':
+      if (value) {
+        mcCommand = `kick ${value} Desconectado por el Administrador`;
+      }
+      break;
+    default:
+      return res.status(400).json({ error: 'Acción desconocida' });
+  }
+
+  if (!mcCommand) {
+    return res.status(400).json({ error: 'Parámetro inválido' });
+  }
+
+  try {
+    const output = await sendRconCommand('127.0.0.1', 25575, 'IceAndDragons2026!', mcCommand);
+    res.json({ success: true, command: mcCommand, output: output || 'Acción aplicada correctamente.' });
+  } catch (err) {
+    res.status(500).json({ success: false, command: mcCommand, error: err.message });
+  }
+});
+
+// Control de Energía (Reiniciar / Detener)
+app.post('/api/server/power', async (req, res) => {
+  const { action } = req.body;
+  if (!['restart', 'stop'].includes(action)) {
+    return res.status(400).json({ error: 'Acción inválida. Usa restart o stop.' });
+  }
+
+  try {
+    // 1. Intentar enviar aviso y /stop por RCON
+    try {
+      await sendRconCommand('127.0.0.1', 25575, 'IceAndDragons2026!', 'say §c[Servidor] El servidor se está reiniciando...');
+      await sendRconCommand('127.0.0.1', 25575, 'IceAndDragons2026!', 'save-all');
+      await sendRconCommand('127.0.0.1', 25575, 'IceAndDragons2026!', 'stop');
+    } catch (e) {}
+
+    if (action === 'stop') {
+      return res.json({ success: true, message: 'Comando de detención enviado al servidor.' });
+    }
+
+    // 2. Si es restart, esperar a que termine el proceso y relanzar ./start.sh
+    setTimeout(() => {
+      try {
+        const startScript = path.join(SERVER_DIR, 'start.sh');
+        const child = spawn(startScript, [], {
+          cwd: SERVER_DIR,
+          detached: true,
+          stdio: 'ignore'
+        });
+        child.unref();
+      } catch (e) {}
+    }, 4000);
+
+    res.json({ success: true, message: 'Servidor reiniciándose. RCON y nuevos mods se cargarán en unos segundos.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Backups: Listar
 app.get('/api/backups', (req, res) => {
   try {
     if (!fs.existsSync(BACKUPS_DIR)) {
@@ -256,6 +473,7 @@ app.get('/api/backups', (req, res) => {
   }
 });
 
+// Backups: Crear nuevo
 app.post('/api/backup', (req, res) => {
   const scriptPath = path.join(SERVER_DIR, 'backup.sh');
   exec(`"${scriptPath}"`, { cwd: SERVER_DIR }, (err, stdout, stderr) => {
@@ -266,7 +484,34 @@ app.post('/api/backup', (req, res) => {
   });
 });
 
-// 8. Playit Iniciar
+// Backups: Descargar archivo
+app.get('/api/backups/download/:filename', (req, res) => {
+  const safeFilename = path.basename(req.params.filename);
+  const filePath = path.join(BACKUPS_DIR, safeFilename);
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+    res.setHeader('Content-Type', 'application/gzip');
+    return fs.createReadStream(filePath).pipe(res);
+  }
+  res.status(404).json({ error: 'Archivo de backup no encontrado' });
+});
+
+// Backups: Eliminar archivo
+app.delete('/api/backups/:filename', (req, res) => {
+  const safeFilename = path.basename(req.params.filename);
+  const filePath = path.join(BACKUPS_DIR, safeFilename);
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      return res.json({ success: true, message: `Backup ${safeFilename} eliminado.` });
+    }
+    res.status(404).json({ error: 'Archivo no encontrado' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Playit: Iniciar
 app.post('/api/playit/start', (req, res) => {
   const scriptPath = path.join(SERVER_DIR, 'start_playit.sh');
   exec(`"${scriptPath}"`, { cwd: SERVER_DIR }, (err, stdout, stderr) => {
@@ -277,9 +522,19 @@ app.post('/api/playit/start', (req, res) => {
   });
 });
 
+// Playit: Detener
+app.post('/api/playit/stop', (req, res) => {
+  try {
+    execSync('pkill -x playit 2>/dev/null || true');
+    res.json({ success: true, message: 'Demonio Playit detenido.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`====================================================`);
-  console.log(`  🐉 Panel Web Ice & Dragons iniciado`);
+  console.log(`  🐉 Panel Web Ice & Dragons v2.0 iniciado`);
   console.log(`  🌐 Acceso: http://localhost:${PORT}`);
   console.log(`====================================================`);
 });

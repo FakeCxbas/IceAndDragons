@@ -1,8 +1,12 @@
-// Ice & Dragons - Panel Web Client Logic
+// ==============================================================================
+// Ice & Dragons - Panel Web v2.0 Client Logic
+// ==============================================================================
 
-// Elementos DOM
+// Elementos DOM Principales
 const statusDot = document.getElementById('status-indicator');
 const statusLabel = document.getElementById('status-label');
+
+// Chunky DOM
 const chunkyProgressBar = document.getElementById('chunky-progress-bar');
 const chunkyPercent = document.getElementById('chunky-percent');
 const chunkyChunksLabel = document.getElementById('chunky-chunks-label');
@@ -11,34 +15,67 @@ const chunkyEta = document.getElementById('chunky-eta');
 const chunkyCoords = document.getElementById('chunky-coords');
 const chunkyDim = document.getElementById('chunky-dim');
 const chunkyStateTag = document.getElementById('chunky-state-tag');
+const btnChunkyPause = document.getElementById('btn-chunky-pause');
+const btnChunkyContinue = document.getElementById('btn-chunky-continue');
+
+// Telemetría de Recursos
+const mcCpuText = document.getElementById('mc-cpu-text');
+const mcCpuSub = document.getElementById('mc-cpu-sub');
+const cpuProgressFill = document.getElementById('cpu-progress-fill');
+const cpuCoresBadge = document.getElementById('cpu-cores-badge');
+const sysCpuText = document.getElementById('sys-cpu-text');
 
 const mcRamText = document.getElementById('mc-ram-text');
 const sysRamText = document.getElementById('sys-ram-text');
 const ramProgressFill = document.getElementById('ram-progress-fill');
-const mcCpuText = document.getElementById('mc-cpu-text');
-const cpuProgressFill = document.getElementById('cpu-progress-fill');
-const cpuCoresBadge = document.getElementById('cpu-cores-badge');
+const ramPercentText = document.getElementById('ram-percent-text');
 
+const diskFreeText = document.getElementById('disk-free-text');
+const diskSubText = document.getElementById('disk-sub-text');
+const diskBadge = document.getElementById('disk-badge');
+const diskProgressFill = document.getElementById('disk-progress-fill');
+
+const worldSizeText = document.getElementById('world-size-text');
+const playersCountText = document.getElementById('players-count-text');
+const playersBadge = document.getElementById('players-badge');
+
+// Playit
 const playitStatusBadge = document.getElementById('playit-status-badge');
 const playitAddressText = document.getElementById('playit-address-text');
 const playitSubText = document.getElementById('playit-sub-text');
 const playitActionContainer = document.getElementById('playit-action-container');
 
+// Consola y Logs
 const terminalBody = document.getElementById('terminal-body');
 const chkAutoscroll = document.getElementById('chk-autoscroll');
 const commandForm = document.getElementById('command-form');
 const commandInput = document.getElementById('command-input');
 const btnClearConsole = document.getElementById('btn-clear-console');
+const logSearchInput = document.getElementById('log-search-input');
+const filterChips = document.querySelectorAll('.filter-chip');
 
+// Backups
 const backupsTbody = document.getElementById('backups-tbody');
 const btnQuickBackup = document.getElementById('btn-quick-backup');
 const btnCreateBackupTab = document.getElementById('btn-create-backup-tab');
 const btnRefresh = document.getElementById('btn-refresh');
 
-const btnChunkyPause = document.getElementById('btn-chunky-pause');
-const btnChunkyContinue = document.getElementById('btn-chunky-continue');
+// Controles del Servidor
+const broadcastForm = document.getElementById('broadcast-form');
+const broadcastInput = document.getElementById('broadcast-input');
+const btnSaveFlush = document.getElementById('btn-save-flush');
+const btnChunkyTrim = document.getElementById('btn-chunky-trim');
+const btnRestartServer = document.getElementById('btn-restart-server');
+const btnStopServer = document.getElementById('btn-stop-server');
 
-// Toast Notification
+// Memoria local de logs para filtrado
+let rawLogLines = [];
+let activeLogFilter = 'all';
+let logSearchQuery = '';
+
+// ==============================================================================
+// 1. Toast Notifications
+// ==============================================================================
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
@@ -48,20 +85,23 @@ function showToast(message, type = 'info') {
   setTimeout(() => {
     toast.style.opacity = '0';
     setTimeout(() => toast.remove(), 300);
-  }, 3500);
+  }, 4000);
 }
 
-// Navegación por pestañas
+// ==============================================================================
+// 2. Navegación por Pestañas
+// ==============================================================================
 const navButtons = document.querySelectorAll('.nav-item');
 const tabViews = document.querySelectorAll('.tab-view');
 const currentTitle = document.getElementById('current-view-title');
 const currentSub = document.getElementById('current-view-subtitle');
 
 const titles = {
-  overview: { title: 'Monitoreo & Pregeneración', sub: 'Supervisión en tiempo real del rendimiento, chunks y túneles' },
+  overview: { title: 'Monitoreo & Pregeneración', sub: 'Supervisión en tiempo real del rendimiento, chunks y recursos' },
+  controls: { title: 'Controles del Servidor', sub: 'Acciones inmediatas sobre clima, tiempo, dificultad y mantenimiento' },
   console: { title: 'Consola del Servidor', sub: 'Registro en vivo de eventos y ejecución interactiva de comandos' },
-  backups: { title: 'Copias de Seguridad', sub: 'Gestión y creación de respaldos comprimidos del mundo' },
-  mods: { title: 'Mods & Servidor', sub: 'Estado de mods instalados y librerías activas' }
+  backups: { title: 'Copias de Seguridad', sub: 'Gestión, creación y descarga de respaldos comprimidos del mundo' },
+  mods: { title: 'Mods & Sistema', sub: 'Estado de mods instalados y librerías multihilo activas' }
 };
 
 navButtons.forEach(btn => {
@@ -84,7 +124,9 @@ navButtons.forEach(btn => {
   });
 });
 
-// 1. Obtener estado general
+// ==============================================================================
+// 3. Telemetría y Estado del Servidor
+// ==============================================================================
 async function fetchStatus() {
   try {
     const res = await fetch('/api/status');
@@ -101,19 +143,52 @@ async function fetchStatus() {
       statusLabel.style.color = '#ff5252';
     }
 
-    // RAM
-    const mcRam = data.minecraft.ramMB;
-    mcRamText.textContent = `${mcRam} MB`;
-    const sysTotal = data.system.totalMemMB;
-    const sysUsed = data.system.usedMemMB;
-    sysRamText.textContent = `Sistema: ${sysUsed} / ${sysTotal} MB`;
-    const ramPct = Math.min(100, Math.round((mcRam / 4096) * 100));
-    ramProgressFill.style.width = `${ramPct}%`;
+    // CPU Normalizada y Detalle de Cores
+    if (data.minecraft && data.minecraft.cpu) {
+      const cpu = data.minecraft.cpu;
+      mcCpuText.textContent = `${cpu.normalized}%`;
+      cpuCoresBadge.textContent = `${data.system.cpuCores} Cores`;
+      mcCpuSub.textContent = `${cpu.coresUsed} de ${data.system.cpuCores} núcleos activos (${cpu.raw}% Linux)`;
+      cpuProgressFill.style.width = `${Math.min(100, cpu.normalized)}%`;
+      sysCpuText.textContent = `${data.system.systemCpuPercent || 0}%`;
+    }
 
-    // CPU
-    mcCpuText.textContent = `${data.minecraft.cpu}%`;
-    cpuCoresBadge.textContent = `${data.system.cpuCores} Cores`;
-    cpuProgressFill.style.width = `${Math.min(100, Math.round(data.minecraft.cpu / data.system.cpuCores))}%`;
+    // RAM
+    if (data.minecraft && data.system) {
+      const ramMB = data.minecraft.ramMB || 0;
+      mcRamText.textContent = `${(ramMB / 1024).toFixed(2)} GB`;
+      ramPercentText.textContent = `${data.minecraft.ramPercent}%`;
+      ramProgressFill.style.width = `${data.minecraft.ramPercent}%`;
+      
+      const sysUsedGB = (data.system.usedMemMB / 1024).toFixed(1);
+      const sysTotalGB = (data.system.totalMemMB / 1024).toFixed(1);
+      sysRamText.textContent = `Sistema: ${sysUsedGB} / ${sysTotalGB} GB (${data.system.memPercent}%)`;
+    }
+
+    // Disco Duro
+    if (data.disk) {
+      diskFreeText.textContent = `${data.disk.freeGB} GB Libres`;
+      diskSubText.textContent = `Total: ${data.disk.totalGB} GB | Usado: ${data.disk.usedGB} GB`;
+      diskBadge.textContent = `${data.disk.percent}% Usado`;
+      diskProgressFill.style.width = `${data.disk.percent}%`;
+      if (data.disk.percent > 85) {
+        diskProgressFill.className = 'card-progress-fill danger';
+      } else {
+        diskProgressFill.className = 'card-progress-fill';
+      }
+    }
+
+    // Tamaño del Mundo
+    if (data.world) {
+      worldSizeText.textContent = `${data.world.sizeGB} GB`;
+    }
+
+    // Jugadores Online
+    if (data.minecraft && data.minecraft.players) {
+      const p = data.minecraft.players;
+      playersCountText.textContent = `${p.count} Online`;
+      playersBadge.textContent = `${p.count} / ${p.max} Jugadores`;
+    }
 
     // Playit
     if (data.playit.running) {
@@ -123,12 +198,13 @@ async function fetchStatus() {
         playitAddressText.textContent = data.playit.address;
         playitSubText.textContent = 'Túnel activo para jugadores';
       } else if (data.playit.claimUrl) {
-        playitAddressText.innerHTML = `<a href="${data.playit.claimUrl}" target="_blank" style="color:#00d2ff; text-decoration:none; font-size:16px;">Vincular Túnel ↗</a>`;
+        playitAddressText.innerHTML = `<a href="${data.playit.claimUrl}" target="_blank" style="color:#00d2ff; text-decoration:underline; font-weight:bold;">Vincular Túnel ↗</a>`;
         playitSubText.textContent = 'Haz clic para asociar tu cuenta';
       } else {
         playitAddressText.textContent = 'Iniciando túnel...';
       }
-      playitActionContainer.innerHTML = `<span class="badge-tag success" style="margin:0;">Playit Conectado</span>`;
+      playitActionContainer.innerHTML = `<button class="btn btn-sm btn-ghost" id="btn-stop-playit">Detener</button>`;
+      document.getElementById('btn-stop-playit')?.addEventListener('click', stopPlayit);
     } else {
       playitStatusBadge.className = 'card-badge';
       playitStatusBadge.textContent = 'Detenido';
@@ -148,7 +224,7 @@ async function fetchStatus() {
   }
 }
 
-// 2. Actualizar interfaz de Chunky
+// 4. Actualizar interfaz de Chunky
 function updateChunkyUI(chunky) {
   chunkyProgressBar.style.width = `${chunky.percent}%`;
   chunkyPercent.textContent = `${chunky.percent}%`;
@@ -176,7 +252,7 @@ function updateChunkyUI(chunky) {
   }
 }
 
-// Control Chunky
+// Controles Chunky
 btnChunkyPause.addEventListener('click', async () => {
   btnChunkyPause.disabled = true;
   try {
@@ -190,7 +266,7 @@ btnChunkyPause.addEventListener('click', async () => {
       showToast('Tarea de Chunky pausada con éxito.', 'info');
       fetchStatus();
     } else {
-      showToast('Error al pausar Chunky: ' + data.error, 'error');
+      showToast('Aviso: ' + (data.error.includes('ECONNREFUSED') ? 'RCON no activo. Se activará al reiniciar el servidor.' : data.error), 'info');
     }
   } catch (e) {
     showToast('Error de red al pausar', 'error');
@@ -210,86 +286,266 @@ btnChunkyContinue.addEventListener('click', async () => {
       showToast('Tarea de Chunky reanudada.', 'success');
       fetchStatus();
     } else {
-      showToast('Error al continuar Chunky: ' + data.error, 'error');
+      showToast('Aviso: ' + (data.error.includes('ECONNREFUSED') ? 'RCON no activo. Se activará al reiniciar el servidor.' : data.error), 'info');
     }
   } catch (e) {
     showToast('Error de red al continuar', 'error');
   }
 });
 
-// Iniciar Playit
-async function startPlayit() {
-  showToast('Iniciando servicio de Playit.gg...', 'info');
+// Chunky Trim
+btnChunkyTrim?.addEventListener('click', async () => {
+  if (!confirm('¿Deseas recortar los chunks fuera de la selección actual? Esto liberará espacio en disco borrando chunks generados por error fuera del radio.')) return;
   try {
-    const res = await fetch('/api/playit/start', { method: 'POST' });
+    const res = await fetch('/api/chunky/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'trim' })
+    });
+    const data = await res.json();
+    showToast(data.success ? 'Comando trim ejecutado.' : 'Aviso: RCON se activará al reiniciar el servidor.', 'info');
+  } catch (e) {
+    showToast('Error al enviar trim', 'error');
+  }
+});
+
+// ==============================================================================
+// 4. Controles del Servidor (Clima, Tiempo, Dificultad, Guardado, Broadcast)
+// ==============================================================================
+document.querySelectorAll('.btn-action').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const type = btn.dataset.action;
+    const value = btn.dataset.val;
+    try {
+      const res = await fetch('/api/server/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, value })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Comando ejecutado: ${data.command}`, 'success');
+      } else {
+        const msg = data.error.includes('ECONNREFUSED')
+          ? 'ℹ️ RCON configurado en puerto 25575. Se activará en cuanto reinicies el servidor.'
+          : data.error;
+        showToast(msg, 'info');
+      }
+    } catch (e) {
+      showToast('Error de conexión al enviar acción.', 'error');
+    }
+  });
+});
+
+// Guardar Mundo Forzado
+btnSaveFlush?.addEventListener('click', async () => {
+  btnSaveFlush.disabled = true;
+  try {
+    const res = await fetch('/api/server/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'save' })
+    });
+    const data = await res.json();
+    showToast(data.success ? 'Mundo guardado forzadamente a disco (/save-all flush).' : 'Aviso: RCON se activará al reiniciar el servidor.', 'info');
+  } catch (e) {
+    showToast('Error al forzar guardado', 'error');
+  } finally {
+    btnSaveFlush.disabled = false;
+  }
+});
+
+// Transmisión de Mensaje Global (Broadcast)
+broadcastForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = broadcastInput.value.trim();
+  if (!text) return;
+
+  try {
+    const res = await fetch('/api/server/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'broadcast', value: text })
+    });
     const data = await res.json();
     if (data.success) {
-      showToast('Playit iniciado. Obteniendo enlace...', 'success');
-      setTimeout(fetchStatus, 2000);
+      showToast('Mensaje global transmitido.', 'success');
+      broadcastInput.value = '';
     } else {
-      showToast('Error al iniciar Playit: ' + data.error, 'error');
+      showToast('Aviso: ' + (data.error.includes('ECONNREFUSED') ? 'RCON se activará al reiniciar el servidor.' : data.error), 'info');
     }
   } catch (e) {
-    showToast('Error al conectar con el backend', 'error');
+    showToast('Error al transmitir mensaje.', 'error');
   }
-}
+});
 
-// 3. Consola y Logs
-function formatLogLine(line) {
-  if (!line.trim()) return '';
-  let cssClass = 'info';
-  if (line.includes('/WARN') || line.includes('[WARN]')) cssClass = 'warn';
-  else if (line.includes('/ERROR') || line.includes('[ERROR]') || line.includes('Exception')) cssClass = 'error';
-  else if (line.includes('[Chunky]')) cssClass = 'chunky';
-  else if (line.includes('[Server]')) cssClass = 'system';
+// Control de Energía (Reiniciar / Detener)
+btnRestartServer?.addEventListener('click', async () => {
+  if (!confirm('¿Deseas reiniciar el servidor de Minecraft?\n\n- Se guardará el mundo y se cerrará de forma segura.\n- Al volver a iniciar, RCON quedará activado en el puerto 25575.\n- Se cargarán en memoria los 7 nuevos mods instalados.\n- Chunky reanudará automáticamente la pregeneración.')) return;
+  
+  btnRestartServer.disabled = true;
+  showToast('Iniciando proceso de reinicio...', 'info');
+  try {
+    const res = await fetch('/api/server/power', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'restart' })
+    });
+    const data = await res.json();
+    showToast(data.message, 'success');
+  } catch (e) {
+    showToast('Error al enviar orden de reinicio.', 'error');
+  } finally {
+    setTimeout(() => { btnRestartServer.disabled = false; }, 8000);
+  }
+});
 
-  // Escapar HTML básico
-  const safe = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return `<div class="log-line ${cssClass}">${safe}</div>`;
-}
+btnStopServer?.addEventListener('click', async () => {
+  if (!confirm('¿Deseas detener el servidor de Minecraft de forma segura?')) return;
+  btnStopServer.disabled = true;
+  try {
+    const res = await fetch('/api/server/power', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'stop' })
+    });
+    const data = await res.json();
+    showToast(data.message, 'info');
+  } catch (e) {
+    showToast('Error al enviar orden de detención.', 'error');
+  } finally {
+    btnStopServer.disabled = false;
+  }
+});
 
+// ==============================================================================
+// 5. Consola y Streaming de Logs con Búsqueda y Filtros
+// ==============================================================================
 function scrollToBottom() {
   if (chkAutoscroll.checked) {
     terminalBody.scrollTop = terminalBody.scrollHeight;
   }
 }
 
+function renderFilteredLogs() {
+  terminalBody.innerHTML = '';
+  const query = logSearchQuery.toLowerCase();
+
+  rawLogLines.forEach(line => {
+    if (!line.trim()) return;
+
+    // Filtro por chip
+    if (activeLogFilter === 'chunky' && !line.includes('[Chunky]')) return;
+    if (activeLogFilter === 'warn' && !line.includes('/WARN')) return;
+    if (activeLogFilter === 'error' && !line.includes('/ERROR')) return;
+
+    // Filtro por texto de búsqueda
+    if (query && !line.toLowerCase().includes(query)) return;
+
+    appendLogLine(line);
+  });
+
+  scrollToBottom();
+}
+
+function appendLogLine(text) {
+  const div = document.createElement('div');
+  div.className = 'log-line';
+
+  if (text.includes('[Chunky]')) div.classList.add('chunky');
+  if (text.includes('/WARN')) div.classList.add('warn');
+  if (text.includes('/ERROR')) div.classList.add('error');
+  if (text.includes('joined the game') || text.includes('left the game')) div.classList.add('join');
+
+  div.textContent = text;
+  terminalBody.appendChild(div);
+
+  // Límite de líneas en el DOM para evitar lentitud
+  if (terminalBody.childNodes.length > 500) {
+    terminalBody.removeChild(terminalBody.firstChild);
+  }
+}
+
+// Búsqueda en logs
+logSearchInput?.addEventListener('input', (e) => {
+  logSearchQuery = e.target.value;
+  renderFilteredLogs();
+});
+
+// Filtro por chip
+filterChips.forEach(chip => {
+  chip.addEventListener('click', () => {
+    filterChips.forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    activeLogFilter = chip.dataset.filter;
+    renderFilteredLogs();
+  });
+});
+
+btnClearConsole.addEventListener('click', () => {
+  terminalBody.innerHTML = '<div class="log-line info">Consola limpiada manualmente.</div>';
+  rawLogLines = [];
+});
+
+// Inicializar SSE para logs en tiempo real
+function initLogStream() {
+  const eventSource = new EventSource('/api/logs/stream');
+  
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.lines) {
+        const newLines = data.lines.split('\n').filter(Boolean);
+        newLines.forEach(l => {
+          if (!rawLogLines.includes(l)) {
+            rawLogLines.push(l);
+            if (rawLogLines.length > 600) rawLogLines.shift();
+
+            // Renderizar si pasa el filtro actual
+            const query = logSearchQuery.toLowerCase();
+            let pass = true;
+            if (activeLogFilter === 'chunky' && !l.includes('[Chunky]')) pass = false;
+            if (activeLogFilter === 'warn' && !l.includes('/WARN')) pass = false;
+            if (activeLogFilter === 'error' && !l.includes('/ERROR')) pass = false;
+            if (query && !l.toLowerCase().includes(query)) pass = false;
+
+            if (pass) {
+              appendLogLine(l);
+              scrollToBottom();
+            }
+          }
+        });
+      }
+    } catch (e) {}
+  };
+
+  eventSource.onerror = () => {
+    setTimeout(initLogStream, 5000);
+  };
+}
+
+// Cargar logs iniciales
 async function loadInitialLogs() {
   try {
     const res = await fetch('/api/logs');
     const data = await res.json();
     if (data.logs) {
-      terminalBody.innerHTML = data.logs.split('\n').map(formatLogLine).join('');
-      scrollToBottom();
+      terminalBody.innerHTML = '';
+      rawLogLines = data.logs.split('\n').filter(Boolean);
+      renderFilteredLogs();
     }
   } catch (e) {}
 }
 
-// Conectar EventSource para SSE en logs
-function setupLogStream() {
-  const evtSource = new EventSource('/api/logs/stream');
-  evtSource.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      if (data.lines) {
-        const rendered = data.lines.split('\n').map(formatLogLine).join('');
-        terminalBody.innerHTML = rendered;
-        scrollToBottom();
-      }
-    } catch (err) {}
-  };
-}
-
-// Enviar comandos RCON
+// Enviar comandos RCON desde la consola
 commandForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const cmd = commandInput.value.trim();
   if (!cmd) return;
 
-  commandInput.value = '';
-  // Mostrar comando en consola
-  terminalBody.innerHTML += `<div class="log-line system">&gt; ${cmd}</div>`;
+  appendLogLine(`> /${cmd}`);
   scrollToBottom();
+  commandInput.value = '';
 
   try {
     const res = await fetch('/api/command', {
@@ -298,81 +554,150 @@ commandForm.addEventListener('submit', async (e) => {
       body: JSON.stringify({ command: cmd })
     });
     const data = await res.json();
-    if (data.success) {
-      if (data.output) {
-        terminalBody.innerHTML += `<div class="log-line info">${data.output}</div>`;
-      }
+    if (data.success && data.output) {
+      data.output.split('\n').forEach(l => appendLogLine(l));
       scrollToBottom();
-    } else {
-      terminalBody.innerHTML += `<div class="log-line error">[RCON Error] ${data.error}</div>`;
+    } else if (!data.success) {
+      const err = data.error.includes('ECONNREFUSED')
+        ? 'Aviso: RCON configurado en puerto 25575. Se activará al reiniciar el servidor.'
+        : data.error;
+      appendLogLine(`[RCON Error]: ${err}`);
       scrollToBottom();
     }
   } catch (err) {
-    terminalBody.innerHTML += `<div class="log-line error">[Error] No se pudo enviar el comando.</div>`;
+    appendLogLine(`[Error]: Error de conexión al enviar comando.`);
     scrollToBottom();
   }
 });
 
-// Quick Chips
-document.querySelectorAll('.chip').forEach(chip => {
+// Chips de comandos rápidos
+document.querySelectorAll('.quick-chips .chip').forEach(chip => {
   chip.addEventListener('click', () => {
     commandInput.value = chip.dataset.cmd;
     commandInput.focus();
   });
 });
 
-btnClearConsole.addEventListener('click', () => {
-  terminalBody.innerHTML = '';
-});
-
-// 4. Backups
+// ==============================================================================
+// 6. Copias de Seguridad (Backups)
+// ==============================================================================
 async function loadBackups() {
   try {
     const res = await fetch('/api/backups');
     const data = await res.json();
+
     if (!data.backups || data.backups.length === 0) {
-      backupsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color:var(--text-dim);">No hay copias de seguridad aún.</td></tr>`;
+      backupsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color:var(--text-dim);">No hay copias de seguridad guardadas. Haz clic en Generar Backup Ahora.</td></tr>`;
       return;
     }
-    backupsTbody.innerHTML = data.backups.map(b => `
-      <tr>
-        <td class="code-font" style="color:var(--accent-cyan);">📁 ${b.name}</td>
+
+    backupsTbody.innerHTML = '';
+    data.backups.forEach(b => {
+      const tr = document.createElement('tr');
+      const dateStr = new Date(b.date).toLocaleString();
+      tr.innerHTML = `
+        <td class="code-font" style="color:#00d2ff;">${b.name}</td>
         <td><strong>${b.sizeMB} MB</strong></td>
-        <td style="color:var(--text-muted);">${new Date(b.date).toLocaleString()}</td>
-        <td><span class="badge-tag success" style="margin:0;">Comprimido</span></td>
-      </tr>
-    `).join('');
+        <td>${dateStr}</td>
+        <td>
+          <a href="/api/backups/download/${encodeURIComponent(b.name)}" class="btn btn-sm btn-primary btn-table-action" download>
+            📥 Descargar
+          </a>
+          <button class="btn btn-sm btn-danger btn-table-action" onclick="deleteBackup('${b.name}')">
+            🗑️ Eliminar
+          </button>
+        </td>
+      `;
+      backupsTbody.appendChild(tr);
+    });
   } catch (e) {
-    backupsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color:var(--accent-red);">Error al cargar backups.</td></tr>`;
+    backupsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color:#ff5252;">Error al cargar copias de seguridad.</td></tr>`;
   }
 }
 
 async function triggerBackup() {
-  showToast('Iniciando proceso de backup del mundo...', 'info');
+  btnQuickBackup.disabled = true;
+  btnCreateBackupTab.disabled = true;
+  showToast('Generando copia de seguridad comprimida del mundo...', 'info');
+
   try {
     const res = await fetch('/api/backup', { method: 'POST' });
     const data = await res.json();
     if (data.success) {
-      showToast('¡Backup generado y rotado con éxito!', 'success');
+      showToast('¡Copia de seguridad generada con éxito!', 'success');
       loadBackups();
     } else {
-      showToast('Error al generar backup: ' + data.error, 'error');
+      showToast('Error al crear copia: ' + data.error, 'error');
     }
   } catch (e) {
-    showToast('Error de conexión al generar backup', 'error');
+    showToast('Error de red al ejecutar backup.', 'error');
+  } finally {
+    btnQuickBackup.disabled = false;
+    btnCreateBackupTab.disabled = false;
   }
 }
 
+window.deleteBackup = async function(filename) {
+  if (!confirm(`¿Deseas eliminar permanentemente el archivo de backup ${filename}?`)) return;
+  try {
+    const res = await fetch(`/api/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Backup ${filename} eliminado.`, 'info');
+      loadBackups();
+    } else {
+      showToast('Error al eliminar: ' + data.error, 'error');
+    }
+  } catch (e) {
+    showToast('Error al eliminar backup', 'error');
+  }
+};
+
 btnQuickBackup.addEventListener('click', triggerBackup);
 btnCreateBackupTab.addEventListener('click', triggerBackup);
+
+// ==============================================================================
+// 7. Playit Actions
+// ==============================================================================
+async function startPlayit() {
+  try {
+    showToast('Iniciando Playit.gg...', 'info');
+    const res = await fetch('/api/playit/start', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Playit iniciado. Obteniendo enlace de reclamo...', 'success');
+      setTimeout(fetchStatus, 2000);
+    }
+  } catch (e) {
+    showToast('Error al iniciar Playit', 'error');
+  }
+}
+
+async function stopPlayit() {
+  if (!confirm('¿Deseas detener el túnel de Playit? Los jugadores remotos no podrán conectarse.')) return;
+  try {
+    const res = await fetch('/api/playit/stop', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Túnel Playit detenido.', 'info');
+      setTimeout(fetchStatus, 1000);
+    }
+  } catch (e) {
+    showToast('Error al detener Playit', 'error');
+  }
+}
+
+// Botón refrescar
 btnRefresh.addEventListener('click', () => {
   fetchStatus();
-  loadBackups();
-  showToast('Datos actualizados', 'info');
+  showToast('Telemetría actualizada.', 'info');
 });
 
 // Inicialización
 fetchStatus();
 loadInitialLogs();
-setupLogStream();
+initLogStream();
+loadBackups();
+
+// Intervalo de actualización automática cada 3 segundos
 setInterval(fetchStatus, 3000);

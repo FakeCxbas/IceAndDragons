@@ -25,6 +25,9 @@
         <button class="nav-item active" data-tab="overview" id="btn-tab-overview">
           <span class="icon">📊</span> Monitoreo & Chunky
         </button>
+        <button class="nav-item" data-tab="controls" id="btn-tab-controls">
+          <span class="icon">🎮</span> Controles del Servidor
+        </button>
         <button class="nav-item" data-tab="console" id="btn-tab-console">
           <span class="icon">💻</span> Consola en Vivo
         </button>
@@ -32,7 +35,7 @@
           <span class="icon">💾</span> Copias de Seguridad
         </button>
         <button class="nav-item" data-tab="mods" id="btn-tab-mods">
-          <span class="icon">🧩</span> Mods & Servidor
+          <span class="icon">🧩</span> Mods & Sistema
         </button>
       </nav>
 
@@ -54,7 +57,7 @@
       <header class="top-header">
         <div class="header-title">
           <h2 id="current-view-title">Monitoreo & Pregeneración</h2>
-          <p id="current-view-subtitle">Supervisión en tiempo real del rendimiento, chunks y túneles</p>
+          <p id="current-view-subtitle">Supervisión en tiempo real del rendimiento, chunks y recursos</p>
         </div>
         <div class="header-actions">
           <button class="btn btn-secondary" id="btn-refresh" title="Refrescar datos">
@@ -66,7 +69,7 @@
         </div>
       </header>
 
-      <!-- View: Overview / Chunky -->
+      <!-- View 1: Overview / Chunky -->
       <section class="tab-view active" id="view-overview">
         <!-- Chunky Hero Card -->
         <div class="chunky-card">
@@ -74,7 +77,7 @@
             <div class="chunky-title-group">
               <div class="badge-tag" id="chunky-state-tag">Pregeneración Activa</div>
               <h3>Progreso de Chunky (Overworld)</h3>
-              <p class="chunky-sub">Generando terreno para eliminar lag de exploración de los jugadores</p>
+              <p class="chunky-sub">Generando terreno para eliminar el lag de exploración de los jugadores</p>
             </div>
             <div class="chunky-actions">
               <button class="btn btn-warning" id="btn-chunky-pause">
@@ -122,8 +125,25 @@
           </div>
         </div>
 
-        <!-- Resource Cards Grid -->
+        <!-- Resource Cards Grid (6 cards) -->
         <div class="cards-grid">
+          <!-- CPU Card (Normalizada 0-100% con desglose de núcleos) -->
+          <div class="stat-card" id="card-cpu">
+            <div class="card-header">
+              <span class="card-title">Carga de CPU</span>
+              <span class="card-badge" id="cpu-cores-badge">4 Cores</span>
+            </div>
+            <div class="card-value" id="mc-cpu-text">0.0%</div>
+            <div class="card-sub" id="mc-cpu-sub">0 de 4 núcleos activos</div>
+            <div class="card-progress">
+              <div class="card-progress-fill warning" id="cpu-progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="card-footer-info" id="cpu-footer-info">
+              <span>Máquina total: <strong id="sys-cpu-text">0%</strong></span>
+              <span class="info-tooltip" title="En Linux cada núcleo equivale al 100%. Un proceso usando 2.2 núcleos marca 220% en raw, normalizado aquí a escala 0-100%.">ℹ️ ¿Por qué >100%?</span>
+            </div>
+          </div>
+
           <!-- RAM Card -->
           <div class="stat-card">
             <div class="card-header">
@@ -135,30 +155,51 @@
             <div class="card-progress">
               <div class="card-progress-fill" id="ram-progress-fill" style="width: 0%"></div>
             </div>
+            <div class="card-footer-info">
+              <span>Uso Java: <strong id="ram-percent-text">0%</strong> de 4GB</span>
+            </div>
           </div>
 
-          <!-- CPU Card -->
+          <!-- Storage / Disk Card -->
           <div class="stat-card">
             <div class="card-header">
-              <span class="card-title">Carga CPU</span>
-              <span class="card-badge" id="cpu-cores-badge">Cores</span>
+              <span class="card-title">Espacio en Disco</span>
+              <span class="card-badge" id="disk-badge">0% Usado</span>
             </div>
-            <div class="card-value" id="mc-cpu-text">0%</div>
-            <div class="card-sub">Optimizaciones multihilo C2ME activas</div>
+            <div class="card-value" id="disk-free-text">0 GB Libres</div>
+            <div class="card-sub" id="disk-sub-text">Total: 0 GB | Usado: 0 GB</div>
             <div class="card-progress">
-              <div class="card-progress-fill warning" id="cpu-progress-fill" style="width: 0%"></div>
+              <div class="card-progress-fill" id="disk-progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="card-footer-info">
+              <span>Partición: <strong>/home</strong></span>
             </div>
           </div>
 
-          <!-- Voice Chat Card -->
+          <!-- World Size Card -->
           <div class="stat-card">
             <div class="card-header">
-              <span class="card-title">Simple Voice Chat</span>
-              <span class="card-badge success">Activo</span>
+              <span class="card-title">Tamaño del Mundo</span>
+              <span class="card-badge success">En Crecimiento</span>
             </div>
-            <div class="card-value">Puerto 24454</div>
-            <div class="card-sub">Protocolo UDP de baja latencia</div>
-            <div class="status-indicator-tag success">Listo para clientes</div>
+            <div class="card-value" id="world-size-text">0 GB</div>
+            <div class="card-sub">Carpeta <code>world/</code> (Overworld)</div>
+            <div class="card-footer-info" style="margin-top: 24px;">
+              <span>Guardado en tiempo real</span>
+            </div>
+          </div>
+
+          <!-- Players & Network Card -->
+          <div class="stat-card">
+            <div class="card-header">
+              <span class="card-title">Jugadores & Red</span>
+              <span class="card-badge" id="players-badge">0 / 20</span>
+            </div>
+            <div class="card-value" id="players-count-text">0 Online</div>
+            <div class="card-sub">Puerto Minecraft: <strong>25565 TCP</strong></div>
+            <div class="card-footer-info" style="margin-top: 14px;">
+              <span>Voice Chat: <strong>24454 UDP</strong></span>
+            </div>
           </div>
 
           <!-- Playit.gg Card -->
@@ -176,7 +217,167 @@
         </div>
       </section>
 
-      <!-- View: Live Console -->
+      <!-- View 2: Server Controls & Actions -->
+      <section class="tab-view" id="view-controls">
+        <div class="controls-container">
+          <!-- RCON Alert Banner -->
+          <div class="notice-banner" id="rcon-notice-banner">
+            <div class="notice-icon">💡</div>
+            <div class="notice-content">
+              <h4>Control Directo del Servidor (RCON)</h4>
+              <p id="rcon-notice-text">
+                Los comandos y acciones rápidas interactúan directamente con el motor de Minecraft. Si el servidor aún no se ha reiniciado desde la configuración de RCON, puedes usar el botón de reinicio para habilitarlo.
+              </p>
+            </div>
+          </div>
+
+          <!-- Action Panels Grid -->
+          <div class="controls-grid">
+            <!-- Time Control Panel -->
+            <div class="control-panel-card">
+              <div class="panel-card-header">
+                <span class="panel-icon">⏰</span>
+                <h4>Hora del Mundo</h4>
+              </div>
+              <p class="panel-desc">Cambia la hora actual del servidor al instante.</p>
+              <div class="btn-group-grid">
+                <button class="btn-action" data-action="time" data-val="day">
+                  <span class="action-icon">🌅</span>
+                  <span>Amanecer</span>
+                  <small>06:00 AM</small>
+                </button>
+                <button class="btn-action" data-action="time" data-val="noon">
+                  <span class="action-icon">☀️</span>
+                  <span>Mediodía</span>
+                  <small>12:00 PM</small>
+                </button>
+                <button class="btn-action" data-action="time" data-val="night">
+                  <span class="action-icon">🌙</span>
+                  <span>Noche</span>
+                  <small>07:00 PM</small>
+                </button>
+                <button class="btn-action" data-action="time" data-val="midnight">
+                  <span class="action-icon">🌑</span>
+                  <span>Medianoche</span>
+                  <small>12:00 AM</small>
+                </button>
+              </div>
+            </div>
+
+            <!-- Weather Control Panel -->
+            <div class="control-panel-card">
+              <div class="panel-card-header">
+                <span class="panel-icon">🌦️</span>
+                <h4>Control del Clima</h4>
+              </div>
+              <p class="panel-desc">Modifica las condiciones atmosféricas del juego.</p>
+              <div class="btn-group-grid three-cols">
+                <button class="btn-action" data-action="weather" data-val="clear">
+                  <span class="action-icon">☀️</span>
+                  <span>Despejado</span>
+                  <small>Sin lluvia</small>
+                </button>
+                <button class="btn-action" data-action="weather" data-val="rain">
+                  <span class="action-icon">🌧️</span>
+                  <span>Lluvia</span>
+                  <small>Precipitaciones</small>
+                </button>
+                <button class="btn-action" data-action="weather" data-val="thunder">
+                  <span class="action-icon">⛈️</span>
+                  <span>Tormenta</span>
+                  <small>Rayos y truenos</small>
+                </button>
+              </div>
+            </div>
+
+            <!-- Difficulty Panel -->
+            <div class="control-panel-card">
+              <div class="panel-card-header">
+                <span class="panel-icon">⚔️</span>
+                <h4>Dificultad del Juego</h4>
+              </div>
+              <p class="panel-desc">Ajusta el daño de enemigos y generación de monstruos.</p>
+              <div class="btn-group-grid">
+                <button class="btn-action" data-action="difficulty" data-val="peaceful">
+                  <span class="action-icon">🕊️</span>
+                  <span>Pacífico</span>
+                  <small>Sin hostiles</small>
+                </button>
+                <button class="btn-action" data-action="difficulty" data-val="easy">
+                  <span class="action-icon">🟢</span>
+                  <span>Fácil</span>
+                  <small>Bajo daño</small>
+                </button>
+                <button class="btn-action" data-action="difficulty" data-val="normal">
+                  <span class="action-icon">🟡</span>
+                  <span>Normal</span>
+                  <small>Estándar</small>
+                </button>
+                <button class="btn-action" data-action="difficulty" data-val="hard">
+                  <span class="action-icon">🔴</span>
+                  <span>Difícil</span>
+                  <small>Desafiante</small>
+                </button>
+              </div>
+            </div>
+
+            <!-- World Maintenance Panel -->
+            <div class="control-panel-card">
+              <div class="panel-card-header">
+                <span class="panel-icon">💾</span>
+                <h4>Mantenimiento & Guardado</h4>
+              </div>
+              <p class="panel-desc">Fuerza el volcado a disco de chunks y datos de jugadores.</p>
+              <div class="btn-group-vertical">
+                <button class="btn btn-primary" id="btn-save-flush" style="width: 100%;">
+                  <span>💾</span> Guardar Mundo Forzado (/save-all flush)
+                </button>
+                <button class="btn btn-secondary" id="btn-chunky-trim" style="width: 100%;">
+                  <span>✂️</span> Recortar Chunks Fuera de Selección (Trim)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Broadcast / Global Message Section -->
+          <div class="broadcast-card">
+            <div class="broadcast-header">
+              <span class="panel-icon">📢</span>
+              <div>
+                <h4>Transmisión de Mensaje Global</h4>
+                <p class="panel-desc">Envía un anuncio destacado a todos los jugadores conectados en el chat del juego.</p>
+              </div>
+            </div>
+            <form class="broadcast-form" id="broadcast-form">
+              <input type="text" id="broadcast-input" placeholder="Escribe el mensaje para los jugadores..." autocomplete="off">
+              <button type="submit" class="btn btn-primary" id="btn-send-broadcast">
+                <span>📢</span> Transmitir
+              </button>
+            </form>
+          </div>
+
+          <!-- Power Controls Section -->
+          <div class="power-card">
+            <div class="power-header">
+              <span class="panel-icon">⚡</span>
+              <div>
+                <h4>Alimentación del Servidor</h4>
+                <p class="panel-desc">Reinicia o detén de forma controlada el proceso de Minecraft.</p>
+              </div>
+            </div>
+            <div class="power-actions">
+              <button class="btn btn-warning" id="btn-restart-server">
+                <span>🔄</span> Reiniciar Servidor
+              </button>
+              <button class="btn btn-danger" id="btn-stop-server">
+                <span>🛑</span> Detener Servidor
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- View 3: Live Console -->
       <section class="tab-view" id="view-console">
         <div class="terminal-container">
           <div class="terminal-toolbar">
@@ -186,7 +387,24 @@
               <span class="dot green"></span>
             </div>
             <span class="terminal-title">Consola en Vivo — latest.log</span>
+            
             <div class="terminal-options">
+              <!-- Search in logs -->
+              <div class="log-search-box">
+                <input type="text" id="log-search-input" placeholder="🔍 Filtrar logs..." autocomplete="off">
+              </div>
+
+              <!-- Quick filter tags -->
+              <div class="log-filter-chips">
+                <button class="filter-chip active" data-filter="all">Todos</button>
+                <button class="filter-chip" data-filter="chunky">Chunky</button>
+                <button class="filter-chip" data-filter="warn">Warn</button>
+                <button class="filter-chip" data-filter="error">Error</button>
+              </div>
+
+              <a href="/api/logs/download" class="btn btn-sm btn-secondary" title="Descargar latest.log" download>
+                📥 Descargar
+              </a>
               <label class="checkbox-label">
                 <input type="checkbox" id="chk-autoscroll" checked> Auto-scroll
               </label>
@@ -207,20 +425,20 @@
             </div>
             <form class="command-form" id="command-form">
               <span class="prompt-symbol">&gt;</span>
-              <input type="text" id="command-input" placeholder="Escribe un comando de Minecraft (ej: list, chunky progress, say Hola)..." autocomplete="off">
+              <input type="text" id="command-input" placeholder="Escribe un comando de Minecraft (ej: list, chunky progress, time set day)..." autocomplete="off">
               <button type="submit" class="btn btn-primary" id="btn-send-cmd">Enviar</button>
             </form>
           </div>
         </div>
       </section>
 
-      <!-- View: Backups -->
+      <!-- View 4: Backups -->
       <section class="tab-view" id="view-backups">
         <div class="content-card">
           <div class="card-title-row">
             <div>
               <h3>Copias de Seguridad (Mundo)</h3>
-              <p class="subtext">Respaldos comprimidos en formato <code>.tar.gz</code> con rotación de las 5 más recientes.</p>
+              <p class="subtext">Respaldos comprimidos en formato <code>.tar.gz</code> con rotación automática.</p>
             </div>
             <button class="btn btn-primary" id="btn-create-backup-tab">
               <span class="btn-icon">💾</span> Generar Backup Ahora
@@ -234,7 +452,7 @@
                   <th>Archivo</th>
                   <th>Tamaño</th>
                   <th>Fecha de Creación</th>
-                  <th>Estado</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="backups-tbody">
@@ -247,7 +465,7 @@
         </div>
       </section>
 
-      <!-- View: Mods & Settings -->
+      <!-- View 5: Mods & System -->
       <section class="tab-view" id="view-mods">
         <div class="content-card">
           <div class="card-title-row">
@@ -268,9 +486,12 @@
             <div class="mod-pill"><span class="mod-icon">🛡️</span> FLAN (Reclamos de Terreno)</div>
             <div class="mod-pill"><span class="mod-icon">🧟</span> Mutant Monsters</div>
             <div class="mod-pill"><span class="mod-icon">🏹</span> AdventureZ</div>
+            <div class="mod-pill"><span class="mod-icon">🍃</span> Leaves Be Gone</div>
             <div class="mod-pill"><span class="mod-icon">🎒</span> Backpacked (Mochilas)</div>
             <div class="mod-pill"><span class="mod-icon">🎙️</span> Simple Voice Chat</div>
-            <div class="mod-pill"><span class="mod-icon">⚡</span> C2ME & Lithium (Chunks a alta velocidad)</div>
+            <div class="mod-pill"><span class="mod-icon">⚡</span> C2ME & Lithium (Multihilo)</div>
+            <div class="mod-pill"><span class="mod-icon">📦</span> FerriteCore & ModernFix</div>
+            <div class="mod-pill"><span class="mod-icon">🎨</span> SkinRestorer</div>
           </div>
         </div>
       </section>
