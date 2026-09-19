@@ -43,7 +43,24 @@ const playersBadge = document.getElementById('players-badge');
 const playitStatusBadge = document.getElementById('playit-status-badge');
 const playitAddressText = document.getElementById('playit-address-text');
 const playitSubText = document.getElementById('playit-sub-text');
+const playitAltIp = document.getElementById('playit-alt-ip');
 const playitActionContainer = document.getElementById('playit-action-container');
+
+// TPS & Rendimiento
+const tpsValue = document.getElementById('tps-value');
+const tpsBadge = document.getElementById('tps-badge');
+const msptText = document.getElementById('mspt-text');
+const msptP95Text = document.getElementById('mspt-p95-text');
+const tpsProgressFill = document.getElementById('tps-progress-fill');
+
+// Controles Spark / Rendimiento
+const btnPerfTick = document.getElementById('btn-perf-tick');
+const btnPerfSparkTps = document.getElementById('btn-perf-spark-tps');
+const btnPerfSparkHealth = document.getElementById('btn-perf-spark-health');
+const btnPerfGc = document.getElementById('btn-perf-gc');
+const diagOutputBox = document.getElementById('diag-output-box');
+const diagOutputText = document.getElementById('diag-output-text');
+const btnCloseDiag = document.getElementById('btn-close-diag');
 
 // Consola y Logs
 const terminalBody = document.getElementById('terminal-body');
@@ -190,6 +207,38 @@ async function fetchStatus() {
       playersBadge.textContent = `${p.count} / ${p.max} Jugadores`;
     }
 
+    // Rendimiento y TPS (Spark & Tick Query)
+    if (data.minecraft && data.minecraft.tps) {
+      const tps = data.minecraft.tps;
+      if (tpsValue) {
+        tpsValue.innerHTML = `${tps.tps.toFixed(1)} <span style="font-size: 14px; font-weight: normal; color: var(--text-muted);">TPS</span>`;
+      }
+      if (tpsBadge) {
+        tpsBadge.textContent = tps.status || `${tps.tps.toFixed(1)} TPS`;
+        if (tps.tps >= 19.5) {
+          tpsBadge.className = 'card-badge success';
+        } else if (tps.tps >= 15.0) {
+          tpsBadge.className = 'card-badge warning';
+        } else {
+          tpsBadge.className = 'card-badge danger';
+        }
+      }
+      if (msptText) msptText.textContent = `${tps.mspt.toFixed(1)} ms`;
+      if (msptP95Text) msptP95Text.textContent = `${tps.percentiles?.p95 ? tps.percentiles.p95.toFixed(1) : tps.mspt.toFixed(1)} ms`;
+      
+      if (tpsProgressFill) {
+        const budgetPercent = Math.min(100, Math.round((tps.mspt / 50.0) * 100));
+        tpsProgressFill.style.width = `${Math.max(15, budgetPercent)}%`;
+        if (budgetPercent <= 65) {
+          tpsProgressFill.className = 'card-progress-fill success';
+        } else if (budgetPercent <= 85) {
+          tpsProgressFill.className = 'card-progress-fill warning';
+        } else {
+          tpsProgressFill.className = 'card-progress-fill danger';
+        }
+      }
+    }
+
     // Playit
     if (data.playit.running) {
       playitStatusBadge.className = 'card-badge success';
@@ -197,19 +246,36 @@ async function fetchStatus() {
       if (data.playit.address) {
         playitAddressText.textContent = data.playit.address;
         playitSubText.textContent = 'Túnel activo para jugadores';
+        if (playitAltIp && data.playit.ipPort) {
+          playitAltIp.textContent = data.playit.ipPort;
+        }
       } else if (data.playit.claimUrl) {
         playitAddressText.innerHTML = `<a href="${data.playit.claimUrl}" target="_blank" style="color:#00d2ff; text-decoration:underline; font-weight:bold;">Vincular Túnel ↗</a>`;
         playitSubText.textContent = 'Haz clic para asociar tu cuenta';
       } else {
         playitAddressText.textContent = 'Iniciando túnel...';
       }
-      playitActionContainer.innerHTML = `<button class="btn btn-sm btn-ghost" id="btn-stop-playit">Detener</button>`;
+      playitActionContainer.innerHTML = `
+        <button class="btn btn-sm btn-secondary" id="btn-copy-ip" title="Copiar dirección">📋 Copiar</button>
+        <button class="btn btn-sm btn-ghost" id="btn-stop-playit">Detener</button>
+      `;
       document.getElementById('btn-stop-playit')?.addEventListener('click', stopPlayit);
+      document.getElementById('btn-copy-ip')?.addEventListener('click', () => {
+        const toCopy = data.playit.address || data.playit.ipPort || '';
+        if (toCopy) {
+          navigator.clipboard.writeText(toCopy).then(() => {
+            showToast(`¡Dirección copiada: ${toCopy}!`, 'success');
+          }).catch(() => {
+            showToast(`Dirección: ${toCopy}`, 'info');
+          });
+        }
+      });
     } else {
       playitStatusBadge.className = 'card-badge';
       playitStatusBadge.textContent = 'Detenido';
       playitAddressText.textContent = 'Sin iniciar';
       playitSubText.textContent = 'Permite jugar sin abrir puertos';
+      if (playitAltIp) playitAltIp.textContent = '--';
       playitActionContainer.innerHTML = `<button class="btn btn-sm btn-primary" id="btn-start-playit">Iniciar Playit</button>`;
       document.getElementById('btn-start-playit')?.addEventListener('click', startPlayit);
     }
@@ -316,6 +382,8 @@ document.querySelectorAll('.btn-action').forEach(btn => {
   btn.addEventListener('click', async () => {
     const type = btn.dataset.action;
     const value = btn.dataset.val;
+    if (!type || !value) return;
+
     try {
       const res = await fetch('/api/server/control', {
         method: 'POST',
@@ -335,6 +403,39 @@ document.querySelectorAll('.btn-action').forEach(btn => {
       showToast('Error de conexión al enviar acción.', 'error');
     }
   });
+});
+
+// Diagnósticos de Rendimiento (Spark & Tick Query)
+async function runDiagCommand(cmdName, command) {
+  try {
+    showToast(`Ejecutando ${cmdName}...`, 'info');
+    const res = await fetch('/api/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (diagOutputBox && diagOutputText) {
+        diagOutputBox.style.display = 'block';
+        diagOutputText.textContent = `> ${command}\n` + (data.output || 'Comando completado exitosamente.');
+      }
+      showToast(`${cmdName} ejecutado con éxito`, 'success');
+      fetchStatus();
+    } else {
+      showToast(`Error: ${data.error}`, 'error');
+    }
+  } catch (err) {
+    showToast(`Error de red al ejecutar ${cmdName}`, 'error');
+  }
+}
+
+btnPerfTick?.addEventListener('click', () => runDiagCommand('Tick Query', 'tick query'));
+btnPerfSparkTps?.addEventListener('click', () => runDiagCommand('Spark TPS', 'spark tps'));
+btnPerfSparkHealth?.addEventListener('click', () => runDiagCommand('Spark Health', 'spark health'));
+btnPerfGc?.addEventListener('click', () => runDiagCommand('Limpieza RAM (GC)', 'spark gc'));
+btnCloseDiag?.addEventListener('click', () => {
+  if (diagOutputBox) diagOutputBox.style.display = 'none';
 });
 
 // Guardar Mundo Forzado

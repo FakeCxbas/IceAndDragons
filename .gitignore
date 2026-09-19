@@ -34,5 +34,7 @@ playit
 playit.log
 panel/panel.log
 token.txt
+*.tmp
+config/spark/tmp*/
 
 

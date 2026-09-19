@@ -165,9 +165,73 @@ function getChunkyProgress() {
   return progress;
 }
 
-// Helper para detectar jugadores desde logs
-function getPlayersOnline() {
+// Helper para obtener TPS y MSPT (Ticks Per Second y salud del servidor)
+let cachedTps = {
+  tps: 20.0,
+  mspt: 20.0,
+  percentiles: { p50: 20.0, p95: 35.0, p99: 50.0 },
+  status: 'Óptimo (20.0 TPS)',
+  lastCheck: 0
+};
+
+async function getTpsStats() {
+  const now = Date.now();
+  if (now - cachedTps.lastCheck < 2500 && cachedTps.lastCheck > 0) {
+    return cachedTps;
+  }
+
+  try {
+    const output = await sendRconCommand('127.0.0.1', 25575, 'IceAndDragons2026!', 'tick query');
+    if (output) {
+      const rateMatch = output.match(/Target tick rate:\s*([\d,\.]+)\s*per second/i);
+      const msptMatch = output.match(/Average time per tick:\s*([\d,\.]+)ms/i);
+      const p50Match = output.match(/P50:\s*([\d,\.]+)ms/i);
+      const p95Match = output.match(/P95:\s*([\d,\.]+)ms/i);
+
+      if (rateMatch) {
+        cachedTps.tps = parseFloat(rateMatch[1].replace(',', '.')) || 20.0;
+      }
+      if (msptMatch) {
+        cachedTps.mspt = parseFloat(msptMatch[1].replace(',', '.')) || 0;
+      }
+      if (p50Match) cachedTps.percentiles.p50 = parseFloat(p50Match[1].replace(',', '.'));
+      if (p95Match) cachedTps.percentiles.p95 = parseFloat(p95Match[1].replace(',', '.'));
+
+      if (cachedTps.mspt <= 35.0 && cachedTps.tps >= 19.5) {
+        cachedTps.status = 'Óptimo (20.0 TPS)';
+      } else if (cachedTps.mspt <= 50.0) {
+        cachedTps.status = 'Bueno (Sin lag)';
+      } else {
+        cachedTps.status = 'Sobrecargado (Lag)';
+      }
+
+      cachedTps.lastCheck = now;
+    }
+  } catch (e) {}
+
+  return cachedTps;
+}
+
+// Helper para detectar jugadores desde RCON o logs
+async function getPlayersOnline() {
   let players = { count: 0, max: 20, list: [] };
+
+  try {
+    const listOut = await sendRconCommand('127.0.0.1', 25575, 'IceAndDragons2026!', 'list');
+    if (listOut) {
+      const match = listOut.match(/There are (\d+) of a max of (\d+) players online:(.*)/i);
+      if (match) {
+        players.count = parseInt(match[1]) || 0;
+        players.max = parseInt(match[2]) || 20;
+        const names = match[3].trim();
+        if (names) {
+          players.list = names.split(',').map(n => n.trim()).filter(Boolean);
+        }
+        return players;
+      }
+    }
+  } catch (e) {}
+
   try {
     if (fs.existsSync(LOGS_FILE)) {
       const tail = execSync(`tail -n 150 "${LOGS_FILE}" 2>/dev/null`, { encoding: 'utf-8' });
@@ -195,7 +259,7 @@ function getPlayersOnline() {
 // ==============================================================================
 
 // Estado General y Telemetría Completa
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
   let isRunning = false;
   let pid = null;
   let rawCpuPercent = 0;
@@ -224,18 +288,35 @@ app.get('/api/status', (req, res) => {
   let playitRunning = false;
   let playitClaimUrl = null;
   let playitAddress = null;
+  let playitIpPort = null;
 
   try {
     const playitPgrep = execSync(`pgrep -x playit 2>/dev/null`, { encoding: 'utf-8' }).trim();
     if (playitPgrep) playitRunning = true;
     
+    if (playitRunning) {
+      try {
+        const tunnelsJson = execSync(`"${path.join(SERVER_DIR, 'playit')}" tunnels list 2>/dev/null`, { encoding: 'utf-8' });
+        const pData = JSON.parse(tunnelsJson);
+        if (pData.tunnels && pData.tunnels.length > 0) {
+          const t = pData.tunnels[0];
+          if (t.alloc && t.alloc.data) {
+            playitAddress = t.alloc.data.assigned_domain || t.alloc.data.assigned_srv;
+            playitIpPort = `${t.alloc.data.ip_hostname}:${t.alloc.data.port_start}`;
+          }
+        }
+      } catch (err) {}
+    }
+
     if (fs.existsSync(PLAYIT_LOG_FILE)) {
       const playitLog = fs.readFileSync(PLAYIT_LOG_FILE, 'utf-8');
       const claimMatch = playitLog.match(/https:\/\/playit\.gg\/claim\/[a-f0-9]{6,12}/i);
       if (claimMatch) playitClaimUrl = claimMatch[0];
 
-      const addrMatch = playitLog.match(/tunnel\s+registered:\s+([a-zA-Z0-9\.\-]+:\d+)/i);
-      if (addrMatch) playitAddress = addrMatch[1];
+      if (!playitAddress) {
+        const addrMatch = playitLog.match(/([a-zA-Z0-9\.\-]+\.ply\.gg)/i);
+        if (addrMatch) playitAddress = addrMatch[1];
+      }
     }
   } catch (e) {}
 
@@ -259,7 +340,8 @@ app.get('/api/status', (req, res) => {
         coresUsed: coresUsed,
         explanation: `En Linux cada núcleo equivale a 100%. ${coresUsed} núcleos activos = ${rawCpuPercent}% raw, equivalente a ${normalizedProcessCpu}% del total del sistema (${numCores} núcleos).`
       },
-      players: getPlayersOnline()
+      players: await getPlayersOnline(),
+      tps: await getTpsStats()
     },
     system: {
       totalMemMB: totalSysMem,
@@ -275,10 +357,16 @@ app.get('/api/status', (req, res) => {
     playit: {
       running: playitRunning,
       claimUrl: playitClaimUrl,
-      address: playitAddress
+      address: playitAddress,
+      ipPort: playitIpPort
     },
     chunky: getChunkyProgress()
   });
+});
+
+// Endpoint dedicado para TPS & Rendimiento
+app.get('/api/tps', async (req, res) => {
+  res.json(await getTpsStats());
 });
 
 // Chunky Progress
@@ -353,6 +441,25 @@ app.post('/api/command', async (req, res) => {
 
   try {
     const output = await sendRconCommand('127.0.0.1', 25575, 'IceAndDragons2026!', command);
+    
+    // Spark genera su salida de forma asíncrona hacia el logger del servidor
+    if (command.toLowerCase().startsWith('spark') || (!output && fs.existsSync(LOGS_FILE))) {
+      await new Promise(r => setTimeout(r, 700));
+      try {
+        const tail = fs.readFileSync(LOGS_FILE, 'utf-8').slice(-5000);
+        const sparkIndex = tail.lastIndexOf('[spark-');
+        if (sparkIndex !== -1) {
+          const sparkSlice = tail.substring(sparkIndex).split('\n')
+            .filter(l => !l.includes('RCON Client') && !l.includes('RCON Listener'))
+            .join('\n')
+            .trim();
+          if (sparkSlice) {
+            return res.json({ success: true, command, output: (output ? output + '\n' : '') + sparkSlice });
+          }
+        }
+      } catch (e) {}
+    }
+
     res.json({ success: true, command, output: output || 'Comando ejecutado sin salida.' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

@@ -125,8 +125,25 @@
           </div>
         </div>
 
-        <!-- Resource Cards Grid (6 cards) -->
+        <!-- Resource Cards Grid (8 cards) -->
         <div class="cards-grid">
+          <!-- TPS Card (Spark & RCON Tick Query) -->
+          <div class="stat-card" id="card-tps">
+            <div class="card-header">
+              <span class="card-title">Rendimiento (TPS)</span>
+              <span class="card-badge success" id="tps-badge">20.0 TPS</span>
+            </div>
+            <div class="card-value" id="tps-value">20.0 <span style="font-size: 14px; font-weight: normal; color: var(--text-muted);">TPS</span></div>
+            <div class="card-sub" id="mspt-sub-text">MSPT: <strong id="mspt-text">-- ms</strong> / 50ms</div>
+            <div class="card-progress">
+              <div class="card-progress-fill success" id="tps-progress-fill" style="width: 100%"></div>
+            </div>
+            <div class="card-footer-info" id="tps-footer-info">
+              <span>Spark: <strong style="color: #00e676;">Activo</strong> | P95: <strong id="mspt-p95-text">-- ms</strong></span>
+              <span class="info-tooltip" title="20.0 TPS es la tasa ideal de actualización de Minecraft. Un MSPT menor a 50ms significa cero lag de servidor.">ℹ️ Info</span>
+            </div>
+          </div>
+
           <!-- CPU Card (Normalizada 0-100% con desglose de núcleos) -->
           <div class="stat-card" id="card-cpu">
             <div class="card-header">
@@ -180,12 +197,12 @@
           <div class="stat-card">
             <div class="card-header">
               <span class="card-title">Tamaño del Mundo</span>
-              <span class="card-badge success">En Crecimiento</span>
+              <span class="card-badge success">Overworld</span>
             </div>
             <div class="card-value" id="world-size-text">0 GB</div>
-            <div class="card-sub">Carpeta <code>world/</code> (Overworld)</div>
+            <div class="card-sub">Carpeta <code>world/</code> (Chunky pausado)</div>
             <div class="card-footer-info" style="margin-top: 24px;">
-              <span>Guardado en tiempo real</span>
+              <span>Generación conservada al 55.3%</span>
             </div>
           </div>
 
@@ -208,10 +225,27 @@
               <span class="card-title">Túnel Playit.gg</span>
               <span class="card-badge" id="playit-status-badge">Detectando...</span>
             </div>
-            <div class="card-value" id="playit-address-text">Sin vincular</div>
-            <div class="card-sub" id="playit-sub-text">Permite jugar sin abrir puertos</div>
-            <div class="card-action" id="playit-action-container">
-              <button class="btn btn-sm btn-primary" id="btn-start-playit">Iniciar Playit</button>
+            <div class="card-value" id="playit-address-text" style="font-size: 16px; word-break: break-all;">Sin vincular</div>
+            <div class="card-sub" id="playit-sub-text">IP alterna: <span id="playit-alt-ip" class="code-font" style="color: var(--accent-cyan);">--</span></div>
+            <div class="card-action" id="playit-action-container" style="display: flex; gap: 8px; margin-top: auto;">
+              <button class="btn btn-sm btn-secondary" id="btn-copy-ip" title="Copiar dirección al portapapeles">📋 Copiar</button>
+              <button class="btn btn-sm btn-primary" id="btn-start-playit">Iniciar</button>
+            </div>
+          </div>
+
+          <!-- Dimensions Card -->
+          <div class="stat-card" id="card-dimensions">
+            <div class="card-header">
+              <span class="card-title">Reinos & Dimensiones</span>
+              <span class="card-badge success">7 Reinos</span>
+            </div>
+            <div class="card-value" style="font-size: 20px;">Multidimensión</div>
+            <div class="card-sub">Nether, End, Bumblezone, Otherside...</div>
+            <div class="card-progress">
+              <div class="card-progress-fill" style="width: 100%; background: linear-gradient(90deg, #9c27b0, #00d2ff);"></div>
+            </div>
+            <div class="card-footer-info">
+              <span>Dread Land & Bosses listos</span>
             </div>
           </div>
         </div>
@@ -335,6 +369,44 @@
                 <button class="btn btn-secondary" id="btn-chunky-trim" style="width: 100%;">
                   <span>✂️</span> Recortar Chunks Fuera de Selección (Trim)
                 </button>
+              </div>
+            </div>
+
+            <!-- Performance & Spark Panel -->
+            <div class="control-panel-card">
+              <div class="panel-card-header">
+                <span class="panel-icon">⚡</span>
+                <h4>Diagnóstico TPS & Rendimiento (Spark)</h4>
+              </div>
+              <p class="panel-desc">Monitorea la respuesta en tiempo real y ejecuta diagnósticos del servidor.</p>
+              <div class="btn-group-grid two-cols">
+                <button class="btn-action" id="btn-perf-tick">
+                  <span class="action-icon">⏱️</span>
+                  <span>Tick Query</span>
+                  <small>/tick query</small>
+                </button>
+                <button class="btn-action" id="btn-perf-spark-tps">
+                  <span class="action-icon">📊</span>
+                  <span>Spark TPS</span>
+                  <small>/spark tps</small>
+                </button>
+                <button class="btn-action" id="btn-perf-spark-health">
+                  <span class="action-icon">🩺</span>
+                  <span>Salud Servidor</span>
+                  <small>/spark health</small>
+                </button>
+                <button class="btn-action" id="btn-perf-gc">
+                  <span class="action-icon">🧹</span>
+                  <span>Limpiar RAM</span>
+                  <small>/spark gc</small>
+                </button>
+              </div>
+              <div class="diag-output-box" id="diag-output-box" style="display: none; margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.6); border: 1px solid var(--border-subtle); border-radius: 8px; font-family: monospace; font-size: 11px; color: #a0aec0; max-height: 140px; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <strong style="color: #00d2ff;">Resultado del Comando:</strong>
+                  <button id="btn-close-diag" style="background:none; border:none; color:#ff5252; cursor:pointer; font-weight:bold;">✕ Cerrar</button>
+                </div>
+                <pre id="diag-output-text" style="white-space: pre-wrap; margin:0; line-height: 1.4;"></pre>
               </div>
             </div>
           </div>
@@ -491,6 +563,7 @@
             <div class="mod-pill"><span class="mod-icon">🎙️</span> Simple Voice Chat</div>
             <div class="mod-pill"><span class="mod-icon">⚡</span> C2ME & Lithium (Multihilo)</div>
             <div class="mod-pill"><span class="mod-icon">📦</span> FerriteCore & ModernFix</div>
+            <div class="mod-pill"><span class="mod-icon">📊</span> Spark Profiler (Telemetría & TPS)</div>
             <div class="mod-pill"><span class="mod-icon">🎨</span> SkinRestorer</div>
           </div>
         </div>

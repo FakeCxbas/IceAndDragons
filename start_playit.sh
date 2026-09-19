@@ -11,7 +11,7 @@ if [ ! -x "./playit" ]; then
 fi
 
 echo "Iniciando demonio Playit.gg..."
-nohup ./playit < /dev/null >> playit.log 2>&1 &
+nohup ./playit start >> playit.log 2>&1 &
 PID=$!
 echo "Playit iniciado con PID: $PID"
 echo "Puedes ver el enlace de reclamo en playit.log o en el Panel Web."
