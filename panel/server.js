@@ -126,7 +126,7 @@ app.get('/api/status', (req, res) => {
     
     if (fs.existsSync(PLAYIT_LOG_FILE)) {
       const playitLog = fs.readFileSync(PLAYIT_LOG_FILE, 'utf-8');
-      const claimMatch = playitLog.match(/https:\/\/playit\.gg\/claim\/[a-zA-Z0-9_-]+/);
+      const claimMatch = playitLog.match(/https:\/\/playit\.gg\/claim\/[a-f0-9]{6,12}/i);
       if (claimMatch) playitClaimUrl = claimMatch[0];
 
       const addrMatch = playitLog.match(/tunnel\s+registered:\s+([a-zA-Z0-9\.\-]+:\d+)/i);
