@@ -103,3 +103,14 @@ screen -S minecraft
 # Para volver a la consola del servidor más tarde:
 screen -r minecraft
 ```
+
+---
+
+## 6. Para Jugadores (Cómo unirte al servidor)
+
+Todos los mods que los jugadores necesitan para conectarse sin errores están en la carpeta [`mods_para_clientes/`](mods_para_clientes):
+
+1. Instala **Minecraft 1.21.1** con [Fabric Loader](https://fabricmc.net/use/installer/) (versión 0.18.3 o superior).
+2. Copia todos los archivos `.jar` que están dentro de [`mods_para_clientes/`](mods_para_clientes) en tu carpeta local `.minecraft/mods`.
+3. Inicia Minecraft con tu perfil de Fabric y conéctate a la IP del servidor.
+

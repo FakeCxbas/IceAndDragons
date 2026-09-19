@@ -22,3 +22,11 @@ Playit.gg.lnk
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Entorno Java local y carpetas temporales
+/runtime
+/mods_client_only/
+/mods_disabled/
+/cache/
+token.txt
+
