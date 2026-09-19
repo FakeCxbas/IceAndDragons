@@ -79,7 +79,10 @@ Para compartir el servidor con amigos sin abrir puertos en el router:
    ```bash
    playit
    ```
-   Te dará un enlace para asociar tu túnel de Minecraft (puerto 25565).
+   Te dará un enlace para asociar tu túnel de Minecraft (puerto 25565 TCP).
+
+3. **Túnel para Chat de Voz (Simple Voice Chat):**
+   El servidor incluye el mod `Simple Voice Chat` (puerto `24454`). Para habilitar el chat de proximidad con amigos, añade en tu panel de Playit.gg un túnel de tipo **UDP** apuntando al puerto `24454`.
 
 ---
 
