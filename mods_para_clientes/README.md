@@ -41,7 +41,7 @@ Si partes de un modpack base de optimización (como *Ultimately Optimized*):
 
 ---
 
-## 🧩 Contenido del paquete (56 mods)
-- **Aventura y Contenido:** Ice and Fire (Dragones), The Bumblezone, Deeper and Darker, Bosses of Mass Destruction, Boss Ultimatum, Awesomedungeon, Supplementaries, Handcrafted, Adorn, Gobber 2, etc.
-- **Utilidades y Jugabilidad:** Backpacked (Mochilas), Carry On, Nifty Carts, No Chat Reports, Quick Skin (Skins personalizadas), Simple Voice Chat.
+## 🧩 Contenido del paquete (62 mods listos para jugar)
+- **Aventura y Contenido:** Ice and Fire (Dragones), AdventureZ, Mutant Monsters, The Bumblezone, Deeper and Darker, Bosses of Mass Destruction, Boss Ultimatum, Awesomedungeon, Supplementaries, Handcrafted, Adorn, Gobber 2.
+- **Utilidades y Jugabilidad:** You're in Grave Danger (Tumbas al morir para no perder tus items), FLAN (Reclamo y protección de terrenos), Leaves Be Gone (Las hojas de los árboles caen al instante), Backpacked (Mochilas), Carry On (Cargar cofres y animales), Nifty Carts (Carretas), No Chat Reports, Quick Skin y SkinRestorer (Skins personalizadas), Simple Voice Chat (Chat de voz 3D por proximidad).
 - **Rendimiento y Optimización de Cliente:** ImmediatelyFast, FerriteCore, ModernFix, Lithium, Debugify, Polytone.

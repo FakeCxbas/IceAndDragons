@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ice & Dragons - Panel de Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar / Nav -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">❄️🐉</div>
+        <div class="brand-text">
+          <h1>Ice & Dragons</h1>
+          <span class="subtext">Fabric 1.21.1</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="overview" id="btn-tab-overview">
+          <span class="icon">📊</span> Monitoreo & Chunky
+        </button>
+        <button class="nav-item" data-tab="console" id="btn-tab-console">
+          <span class="icon">💻</span> Consola en Vivo
+        </button>
+        <button class="nav-item" data-tab="backups" id="btn-tab-backups">
+          <span class="icon">💾</span> Copias de Seguridad
+        </button>
+        <button class="nav-item" data-tab="mods" id="btn-tab-mods">
+          <span class="icon">🧩</span> Mods & Servidor
+        </button>
+      </nav>
+
+      <div class="server-badge-card" id="server-badge-card">
+        <div class="badge-status">
+          <span class="status-dot online" id="status-indicator"></span>
+          <span class="status-label" id="status-label">Comprobando...</span>
+        </div>
+        <div class="badge-details" id="badge-details">
+          <span>Puerto: <strong>25565</strong></span>
+          <span>Voice: <strong>24454 UDP</strong></span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Header -->
+      <header class="top-header">
+        <div class="header-title">
+          <h2 id="current-view-title">Monitoreo & Pregeneración</h2>
+          <p id="current-view-subtitle">Supervisión en tiempo real del rendimiento, chunks y túneles</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" id="btn-refresh" title="Refrescar datos">
+            <span class="btn-icon">🔄</span> Actualizar
+          </button>
+          <button class="btn btn-primary" id="btn-quick-backup">
+            <span class="btn-icon">💾</span> Backup Rápido
+          </button>
+        </div>
+      </header>
+
+      <!-- View: Overview / Chunky -->
+      <section class="tab-view active" id="view-overview">
+        <!-- Chunky Hero Card -->
+        <div class="chunky-card">
+          <div class="chunky-header">
+            <div class="chunky-title-group">
+              <div class="badge-tag" id="chunky-state-tag">Pregeneración Activa</div>
+              <h3>Progreso de Chunky (Overworld)</h3>
+              <p class="chunky-sub">Generando terreno para eliminar lag de exploración de los jugadores</p>
+            </div>
+            <div class="chunky-actions">
+              <button class="btn btn-warning" id="btn-chunky-pause">
+                <span>⏸</span> Pausar
+              </button>
+              <button class="btn btn-success" id="btn-chunky-continue">
+                <span>▶</span> Continuar
+              </button>
+            </div>
+          </div>
+
+          <div class="progress-container">
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="chunky-progress-bar" style="width: 0%">
+                <div class="progress-shimmer"></div>
+              </div>
+            </div>
+            <div class="progress-stats">
+              <span class="progress-percent" id="chunky-percent">0.0%</span>
+              <span class="progress-chunks" id="chunky-chunks-label">0 / 1,562,500 chunks</span>
+            </div>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <span class="metric-label">Velocidad</span>
+              <span class="metric-value" id="chunky-rate">-- cps</span>
+              <span class="metric-sub">chunks por segundo</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-label">Tiempo Restante (ETA)</span>
+              <span class="metric-value" id="chunky-eta">--:--:--</span>
+              <span class="metric-sub">aproximado</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-label">Coordenada Actual</span>
+              <span class="metric-value code-font" id="chunky-coords">0, 0</span>
+              <span class="metric-sub">posición de chunk</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-label">Dimensión</span>
+              <span class="metric-value" id="chunky-dim">Overworld</span>
+              <span class="metric-sub">Radio 10,000 bloques</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resource Cards Grid -->
+        <div class="cards-grid">
+          <!-- RAM Card -->
+          <div class="stat-card">
+            <div class="card-header">
+              <span class="card-title">Memoria RAM</span>
+              <span class="card-badge" id="ram-badge">4 GB Asignados</span>
+            </div>
+            <div class="card-value" id="mc-ram-text">0 MB</div>
+            <div class="card-sub" id="sys-ram-text">Sistema: 0 / 0 MB</div>
+            <div class="card-progress">
+              <div class="card-progress-fill" id="ram-progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- CPU Card -->
+          <div class="stat-card">
+            <div class="card-header">
+              <span class="card-title">Carga CPU</span>
+              <span class="card-badge" id="cpu-cores-badge">Cores</span>
+            </div>
+            <div class="card-value" id="mc-cpu-text">0%</div>
+            <div class="card-sub">Optimizaciones multihilo C2ME activas</div>
+            <div class="card-progress">
+              <div class="card-progress-fill warning" id="cpu-progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Voice Chat Card -->
+          <div class="stat-card">
+            <div class="card-header">
+              <span class="card-title">Simple Voice Chat</span>
+              <span class="card-badge success">Activo</span>
+            </div>
+            <div class="card-value">Puerto 24454</div>
+            <div class="card-sub">Protocolo UDP de baja latencia</div>
+            <div class="status-indicator-tag success">Listo para clientes</div>
+          </div>
+
+          <!-- Playit.gg Card -->
+          <div class="stat-card" id="playit-card">
+            <div class="card-header">
+              <span class="card-title">Túnel Playit.gg</span>
+              <span class="card-badge" id="playit-status-badge">Detectando...</span>
+            </div>
+            <div class="card-value" id="playit-address-text">Sin vincular</div>
+            <div class="card-sub" id="playit-sub-text">Permite jugar sin abrir puertos</div>
+            <div class="card-action" id="playit-action-container">
+              <button class="btn btn-sm btn-primary" id="btn-start-playit">Iniciar Playit</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Live Console -->
+      <section class="tab-view" id="view-console">
+        <div class="terminal-container">
+          <div class="terminal-toolbar">
+            <div class="terminal-window-buttons">
+              <span class="dot red"></span>
+              <span class="dot yellow"></span>
+              <span class="dot green"></span>
+            </div>
+            <span class="terminal-title">Consola en Vivo — latest.log</span>
+            <div class="terminal-options">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-autoscroll" checked> Auto-scroll
+              </label>
+              <button class="btn btn-sm btn-ghost" id="btn-clear-console">Limpiar</button>
+            </div>
+          </div>
+
+          <div class="terminal-body" id="terminal-body">
+            <div class="log-line info">Conectando con el servidor...</div>
+          </div>
+
+          <div class="terminal-footer">
+            <div class="quick-chips">
+              <span class="chip" data-cmd="list">/list</span>
+              <span class="chip" data-cmd="chunky progress">/chunky progress</span>
+              <span class="chip" data-cmd="save-all">/save-all</span>
+              <span class="chip" data-cmd="say ¡Bienvenidos al servidor!">/say</span>
+            </div>
+            <form class="command-form" id="command-form">
+              <span class="prompt-symbol">&gt;</span>
+              <input type="text" id="command-input" placeholder="Escribe un comando de Minecraft (ej: list, chunky progress, say Hola)..." autocomplete="off">
+              <button type="submit" class="btn btn-primary" id="btn-send-cmd">Enviar</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Backups -->
+      <section class="tab-view" id="view-backups">
+        <div class="content-card">
+          <div class="card-title-row">
+            <div>
+              <h3>Copias de Seguridad (Mundo)</h3>
+              <p class="subtext">Respaldos comprimidos en formato <code>.tar.gz</code> con rotación de las 5 más recientes.</p>
+            </div>
+            <button class="btn btn-primary" id="btn-create-backup-tab">
+              <span class="btn-icon">💾</span> Generar Backup Ahora
+            </button>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table" id="backups-table">
+              <thead>
+                <tr>
+                  <th>Archivo</th>
+                  <th>Tamaño</th>
+                  <th>Fecha de Creación</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="backups-tbody">
+                <tr>
+                  <td colspan="4" class="text-center">Cargando backups...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Mods & Settings -->
+      <section class="tab-view" id="view-mods">
+        <div class="content-card">
+          <div class="card-title-row">
+            <div>
+              <h3>Mods Activos en el Servidor</h3>
+              <p class="subtext">Paquete de mods optimizado con C2ME, Lithium, FerriteCore, Ice and Fire y utilidades.</p>
+            </div>
+            <span class="badge-tag success">Fabric 1.21.1</span>
+          </div>
+
+          <div class="mods-showcase-grid">
+            <div class="mod-pill"><span class="mod-icon">🐉</span> Ice and Fire (Dragones)</div>
+            <div class="mod-pill"><span class="mod-icon">🐝</span> The Bumblezone</div>
+            <div class="mod-pill"><span class="mod-icon">🌌</span> Deeper and Darker</div>
+            <div class="mod-pill"><span class="mod-icon">⚔️</span> Bosses of Mass Destruction</div>
+            <div class="mod-pill"><span class="mod-icon">💀</span> Boss Ultimatum</div>
+            <div class="mod-pill"><span class="mod-icon">🪦</span> You're in Grave Danger (Tumbas)</div>
+            <div class="mod-pill"><span class="mod-icon">🛡️</span> FLAN (Reclamos de Terreno)</div>
+            <div class="mod-pill"><span class="mod-icon">🧟</span> Mutant Monsters</div>
+            <div class="mod-pill"><span class="mod-icon">🏹</span> AdventureZ</div>
+            <div class="mod-pill"><span class="mod-icon">🎒</span> Backpacked (Mochilas)</div>
+            <div class="mod-pill"><span class="mod-icon">🎙️</span> Simple Voice Chat</div>
+            <div class="mod-pill"><span class="mod-icon">⚡</span> C2ME & Lithium (Chunks a alta velocidad)</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -28,5 +28,11 @@ desktop.ini
 /mods_client_only/
 /mods_disabled/
 /cache/
+/backups/
+/panel/node_modules/
+playit
+playit.log
+panel/panel.log
 token.txt
+
 
