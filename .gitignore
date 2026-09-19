@@ -1,0 +1,24 @@
+# Minecraft Server gitignore
+
+# World / Saves (excluido por tamaño > 4GB, transferir directamente por red o USB)
+/world/
+/world_nether/
+/world_the_end/
+
+# Logs y reportes de crash
+/logs/
+/crash-reports/
+
+# Cache y archivos generados en ejecución
+/.fabric/
+/dynamic-data-pack-cache/
+/usercache.json
+
+# Accesos directos de Windows
+*.lnk
+Playit.gg.lnk
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+desktop.ini
